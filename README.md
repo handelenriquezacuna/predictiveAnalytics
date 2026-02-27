@@ -8,6 +8,7 @@ Proyecto de análisis predictivo sobre demanda de bicicletas compartidas.
 
 - **Charpentier Gamboa**, Eduardo Alonso
 - **Enríquez Acuña**, Handel
+- ** Josué Daniel Hidalgo Guevara
 
 ## Requisitos
 
