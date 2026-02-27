@@ -1,0 +1,69 @@
+---
+title: "BikeSharingDemand"
+output: html_document
+authors: Charpentier Gamboa Eduardo Alonso, Enríquez Acuña Handel 
+---
+```{r instalacion de librerias}
+install.packages(c("readr", "tidyverse", "janitor", "skimr", "kableExtra")) 
+```
+
+```{r Cargamos las librerías necesarias}
+library(readr)      # Para leer el archivo csv
+library(tidyverse)  # Para usar select, filter, mutate y pipes (%>%)
+library(janitor)    # Para limpiar los nombres de las columnas rápidamente
+library(skimr)      # Para el resumen estadístico detallado
+library(kableExtra) # Para que nuestras tablas se vean ordenadas en el reporte
+```
+# Carga de datos
+```{r Cargamos el dataset}
+df <- read_csv("recursos/day.csv")
+glimpse(df)
+df <- as_tibble(df)
+df
+```
+
+# Renombramos columnas
+```{r}
+dfRenombrado <- df %>% 
+  rename(
+    fecha = dteday,
+    estacion = season,
+    total_rentas = cnt,
+    clima = weathersit,
+    año = yr
+  )
+dfRenombrado
+glimpse(dfRenombrado)
+```
+
+# Seleccionamos las columnas más importantes para el análisis
+```{r}
+df_reducido <- dfRenombrado %>% select(fecha, estacion, clima, temp, total_rentas)
+df_reducido
+```
+
+# Filtramos días con alta demanda para entender condiciones
+```{r}
+df_alta_demanda <- df_reducido %>%  filter(total_rentas > 6000)
+df_alta_demanda
+```
+
+# Creamos una columna que calcula el porcentaje de usuarios casuales
+```{r}
+dfPorcentajeCasual <- dfRenombrado %>%
+  mutate(porcentaje_casual = (casual / total_rentas) * 100)
+
+dfPorcentajeCasual
+```
+
+# Verificamos la nueva columna al final
+```{r}
+resumen_estaciones <- dfRenombrado %>% 
+  group_by(estacion) %>% 
+  summarise(
+    promedio_diario = mean(total_rentas),
+    maximo_alcanzado = max(total_rentas),
+    dias_totales = n() # Cuenta cuántos días hay en cada categoría
+  )
+skim(resumen_estaciones)
+```
