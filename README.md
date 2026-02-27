@@ -1,7 +1,3 @@
-
-Readme · MD
-Copiar
-
 # Predicción de Demanda - Bike Sharing
 
 Proyecto de análisis predictivo sobre demanda de bicicletas compartidas.
