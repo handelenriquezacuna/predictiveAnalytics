@@ -231,6 +231,8 @@ ggplot(demanda_mes, aes(x = mes, y = promedio_rentas, group = 1)) +
 
 ```
 
+Se puede observar que entre los meses de mayo a septiembre es cuando hay mayor demanda de bicicletas, se interpreta la razón de este suceso por e hecho de la entrada del verano(mayo), el verano (junio- agosto), y la salida del verano(septiembre), y ya en meses o epocas más frías la demanda disminuye
+
 ```{r dia laboral vs fin de semana}
 
 demanda_tipo_dia <- df_clean %>%
@@ -252,6 +254,8 @@ ggplot(df_clean, aes(x = tipo_dia, y = total_rentas, fill = tipo_dia)) +
   theme(legend.position = "none")
 
 ```
+Se puede interpretar que el limite superior del día laboral es ligeramente mayor, mientras que el limite inferior de fin de semana es altamente inferior, lo cual indica más variedad en la demanda de bicicletas
+
 ```{r demanda vs temperatura}
 
 ggplot(df_clean, aes(x = temp, y = total_rentas)) +
@@ -265,7 +269,7 @@ ggplot(df_clean, aes(x = temp, y = total_rentas)) +
   theme_minimal(base_size = 13)
 
 ```
-
+Se puede observar que la temperatura afecta la cantidad de bicicletas alquiladas, ya que se puede observar una mayor cantidad de alquileres mientras más alta sea la temperatura
 
 *Proyecto desarrollado para el curso CD-501 Analítica Predictiva de Datos —
 Universidad Fidélitas.*
