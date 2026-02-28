@@ -8,7 +8,7 @@ Proyecto de análisis predictivo sobre demanda de bicicletas compartidas.
 
 - **Charpentier Gamboa**, Eduardo Alonso
 - **Enríquez Acuña**, Handel
-- ** Josué Daniel Hidalgo Guevara
+- **Josué Daniel Hidalgo Guevara
 
 ## Requisitos
 
@@ -33,7 +33,6 @@ predictiveAnalytics/
 ├── predictiveAnalytics.Rproj    # Archivo de proyecto RStudio
 ├── README.md
 ├── .gitignore
-├── renv.lock                    # Lockfile de dependencias
 │
 └── recursos/
     └── day.csv                  # Dataset de demanda diaria
