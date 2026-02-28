@@ -14,56 +14,205 @@ library(janitor)    # Para limpiar los nombres de las columnas rápidamente
 library(skimr)      # Para el resumen estadístico detallado
 library(kableExtra) # Para que nuestras tablas se vean ordenadas en el reporte
 ```
-# Carga de datos
+# 2. Descripción del Problema
+
+Los sistemas de bicicletas compartidas se han convertido en una pieza fundamental de la
+movilidad urbana sostenible. Predecir con precisión la demanda diaria de alquiler permite
+a los operadores **optimizar la distribución de flotas**, planificar mantenimiento y mejorar
+la experiencia del usuario.
+
+La pregunta central de este proyecto es:
+
+> **¿Cuántas bicicletas serán alquiladas en un día determinado, considerando factores
+climáticos y temporales?**
+
+Un modelo predictivo robusto permite:
+
+- **Evitar desabastecimiento** en días de alta demanda (p. ej., días cálidos y secos).
+- **Reducir costos operativos** redistribuyendo unidades en días de baja demanda.
+- **Planificar estratégicamente** según estaciones del año, feriados y condiciones climáticas.
+
+# Presentacion del dataset
 ```{r Cargamos el dataset}
 df <- read_csv("recursos/day.csv")
 glimpse(df)
 df <- as_tibble(df)
 df
 ```
+> **Variable objetivo:** `cnt` — total de bicicletas alquiladas por día.
+>
+> **Nota:** `casual` y `registered` no deben usarse como predictores ya que su suma
+> compone directamente `cnt`.
 
-# Renombramos columnas
+## Renombrar y tipificar columnas
 ```{r}
-dfRenombrado <- df %>% 
+df_clean <- df %>%
   rename(
-    fecha = dteday,
-    estacion = season,
-    total_rentas = cnt,
-    clima = weathersit,
-    año = yr
+    fecha        = dteday,
+    estacion     = season,
+    anio         = yr,
+    mes          = mnth,
+    feriado      = holiday,
+    dia_semana   = weekday,
+    dia_laboral  = workingday,
+    clima        = weathersit,
+    total_rentas = cnt
+  ) %>%
+  mutate(
+    fecha       = as.Date(fecha),
+    estacion    = factor(estacion, levels = 1:4,
+                         labels = c("Invierno", "Primavera", "Verano", "Otoño")),
+    anio        = factor(anio, levels = 0:1, labels = c("2011", "2012")),
+    mes         = factor(mes, levels = 1:12, labels = month.abb),
+    feriado     = factor(feriado, levels = 0:1, labels = c("No", "Sí")),
+    dia_semana  = factor(dia_semana, levels = 0:6,
+                         labels = c("Dom", "Lun", "Mar", "Mié", "Jue", "Vie", "Sab")),
+    dia_laboral = factor(dia_laboral, levels = 0:1, labels = c("No", "Sí")),
+    clima       = factor(clima, levels = 1:4,
+                         labels = c("Despejado", "Nublado", "Lluvia Ligera", "Tormenta")),
+    tipo_dia    = ifelse(dia_laboral == "Sí", "Día Laboral", "Fin de Semana / Feriado"),
+    pct_casual  = round((casual / total_rentas) * 100, 1)
   )
-dfRenombrado
-glimpse(dfRenombrado)
+
+glimpse(df_clean)
+```
+## Verificación de valores faltantes
+
+```{r valores-faltantes}
+na_summary <- df_clean %>%
+  summarise(across(everything(), ~ sum(is.na(.)))) %>%
+  pivot_longer(everything(), names_to = "Variable", values_to = "NA_Count") %>%
+  filter(NA_Count > 0)
+
+if (nrow(na_summary) == 0) {
+  cat("No se encontraron valores faltantes en ninguna variable.\n")
+} else {
+  na_summary %>%
+    kable() %>%
+    kable_styling(bootstrap_options = c("striped"), full_width = FALSE)
+}
+```
+## Resumen estadístico
+```{r resumen-estadistico}
+df_clean %>%
+  select(temp, atemp, hum, windspeed, casual, registered, total_rentas) %>%
+  skim() %>%
+  kable() %>%
+  kable_styling(bootstrap_options = c("striped", "hover", "condensed"),
+                full_width = FALSE, font_size = 12)
 ```
 
-# Seleccionamos las columnas más importantes para el análisis
-```{r}
-df_reducido <- dfRenombrado %>% select(fecha, estacion, clima, temp, total_rentas)
-df_reducido
-```
+# Análisis Exploratorio de Datos (EDA)
 
-# Filtramos días con alta demanda para entender condiciones
-```{r}
-df_alta_demanda <- df_reducido %>%  filter(total_rentas > 6000)
-df_alta_demanda
-```
-
-# Creamos una columna que calcula el porcentaje de usuarios casuales
-```{r}
-dfPorcentajeCasual <- dfRenombrado %>%
-  mutate(porcentaje_casual = (casual / total_rentas) * 100)
-
-dfPorcentajeCasual
-```
-
-# Verificamos la nueva columna al final
-```{r}
-resumen_estaciones <- dfRenombrado %>% 
-  group_by(estacion) %>% 
+## Distribución de la variable objetivo (`total_rentas`)
+```{r dist-total-rentas}
+stats_cnt <- df_clean %>%
   summarise(
-    promedio_diario = mean(total_rentas),
-    maximo_alcanzado = max(total_rentas),
-    dias_totales = n() # Cuenta cuántos días hay en cada categoría
+    Media   = round(mean(total_rentas)),
+    Mediana = median(total_rentas),
+    SD      = round(sd(total_rentas)),
+    Min     = min(total_rentas),
+    Max     = max(total_rentas),
+    Q1      = quantile(total_rentas, 0.25),
+    Q3      = quantile(total_rentas, 0.75)
   )
-skim(resumen_estaciones)
+
+stats_cnt %>%
+  kable(caption = "Estadísticas descriptivas de la demanda diaria") %>%
+  kable_styling(bootstrap_options = c("striped"), full_width = FALSE)
+
+ggplot(df_clean, aes(x = total_rentas)) +
+  geom_histogram(aes(y = after_stat(density)),
+                 bins = 30, fill = "#3498db", color = "white", alpha = 0.8) +
+  geom_density(color = "#e74c3c", linewidth = 1) +
+  geom_vline(xintercept = mean(df_clean$total_rentas),
+             linetype = "dashed", color = "#2c3e50", linewidth = 0.8) +
+  annotate("text",
+           x = mean(df_clean$total_rentas) + 300,
+           y = 0.00035,
+           label = paste0("Media = ", round(mean(df_clean$total_rentas))),
+           hjust = 0, fontface = "bold", size = 3.5) +
+  scale_y_continuous(labels = scales::label_number(accuracy = 0.00001)) +
+  labs(
+    title = "Distribución de la Demanda Diaria de Bicicletas",
+    subtitle = "Histograma con curva de densidad superpuesta",
+    x = "Total de Bicicletas Alquiladas por Día",
+    y = "Densidad"
+  ) +
+  theme_minimal(base_size = 13)
 ```
+
+La distribución muestra una forma aproximadamente **normal con leve asimetría negativa**,
+lo que sugiere que la mayoría de los días tienen demanda moderada-alta, con
+algunos días atípicos de baja demanda (posiblemente asociados a condiciones climáticas adversas).
+
+## Detección de Outliers
+```{r outliers}
+p_box <- ggplot(df_clean, aes(y = total_rentas)) +
+  geom_boxplot(fill = "#3498db", alpha = 0.6, width = 0.4) +
+  labs(title = "Boxplot de Demanda Diaria", y = "Total Rentas") +
+  theme_minimal(base_size = 13) +
+  theme(axis.text.x = element_blank(), axis.ticks.x = element_blank())
+
+Q1 <- quantile(df_clean$total_rentas, 0.25)
+Q3 <- quantile(df_clean$total_rentas, 0.75)
+IQR_val <- Q3 - Q1
+lower <- Q1 - 1.5 * IQR_val
+upper <- Q3 + 1.5 * IQR_val
+
+outliers <- df_clean %>%
+  filter(total_rentas < lower | total_rentas > upper)
+
+cat(paste0("Rango IQR: [", round(lower), ", ", round(upper), "]\n"))
+cat(paste0("Outliers detectados: ", nrow(outliers), " días\n"))
+
+p_box_season <- ggplot(df_clean, aes(x = estacion, y = total_rentas, fill = estacion)) +
+  geom_boxplot(alpha = 0.7) +
+  scale_fill_brewer(palette = "Set2") +
+  labs(title = "Distribución por Estación", x = "", y = "Total Rentas") +
+  theme_minimal(base_size = 13) +
+  theme(legend.position = "none")
+
+p_box + p_box_season
+```
+```{r outliers-detalle}
+if (nrow(outliers) > 0) {
+  outliers %>%
+    select(fecha, estacion, clima, temp, hum, windspeed, total_rentas) %>%
+    arrange(total_rentas) %>%
+    kable(caption = "Días identificados como outliers") %>%
+    kable_styling(bootstrap_options = c("striped", "hover"), full_width = FALSE)
+}
+```
+
+## Patrones Temporales
+### Evolucion temporal de la demanda
+
+Se utiliza LOESS(LOcally Estimated Scatterplot Smoothing) para la reduccion de ruido y revelar la tendencia en la demanda
+
+```{r serie-temporal}
+ggplot(df_clean, aes(x = fecha, y = total_rentas)) +
+  geom_line(color = "#7f8c8d", alpha = 0.5) +
+  geom_smooth(method = "loess", span = 0.15, color = "#e74c3c", se = TRUE, alpha = 0.2) +
+  labs(
+    title = "Evolución Diaria de la Demanda de Bicicletas (2011–2012)",
+    subtitle = "Línea suavizada LOESS en rojo",
+    x = "Fecha",
+    y = "Total de Bicicletas Alquiladas"
+  ) +
+  scale_x_date(date_labels = "%b %Y", date_breaks = "2 months") +
+  theme_minimal(base_size = 13) +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+```
+Se observa una **clara estacionalidad anual**: la demanda crece de primavera a verano/otoño
+y disminuye en invierno. Además, hay una **tendencia creciente** entre 2011 y 2012,
+posiblemente por mayor adopción del sistema.
+
+
+
+
+
+
+
+*Proyecto desarrollado para el curso CD-501 Analítica Predictiva de Datos —
+Universidad Fidélitas.*
