@@ -210,8 +210,61 @@ posiblemente por mayor adopción del sistema.
 
 
 visualizaciones
+```{r demanda por mes}
 
+demanda_mes <- df_clean %>%
+  group_by(mes) %>%
+  summarise(
+    promedio_rentas = mean(total_rentas),
+    .groups = "drop"
+  )
 
+ggplot(demanda_mes, aes(x = mes, y = promedio_rentas, group = 1)) +
+  geom_line(color = "#2c3e50", linewidth = 1) +
+  geom_point(size = 3, color = "#e74c3c") +
+  labs(
+    title = "Demanda Promedio de Bicicletas por Mes",
+    x = "Mes",
+    y = "Promedio de Bicicletas Alquiladas"
+  ) +
+  theme_minimal(base_size = 13)
+
+```
+
+```{r dia laboral vs fin de semana}
+
+demanda_tipo_dia <- df_clean %>%
+  group_by(tipo_dia) %>%
+  summarise(
+    promedio_rentas = mean(total_rentas),
+    .groups = "drop"
+  )
+
+ggplot(df_clean, aes(x = tipo_dia, y = total_rentas, fill = tipo_dia)) +
+  geom_boxplot(alpha = 0.7) +
+  scale_fill_brewer(palette = "Set2") +
+  labs(
+    title = "Demanda: Día Laboral vs Fin de Semana / Feriado",
+    x = "",
+    y = "Total de Bicicletas Alquiladas"
+  ) +
+  theme_minimal(base_size = 13) +
+  theme(legend.position = "none")
+
+```
+```{r demanda vs temperatura}
+
+ggplot(df_clean, aes(x = temp, y = total_rentas)) +
+  geom_point(alpha = 0.5, color = "#3498db") +
+  geom_smooth(method = "lm", color = "#e74c3c", se = TRUE) +
+  labs(
+    title = "Relación entre Temperatura y Demanda de Bicicletas",
+    x = "Temperatura (Normalizada)",
+    y = "Total de Bicicletas Alquiladas"
+  ) +
+  theme_minimal(base_size = 13)
+
+```
 
 
 *Proyecto desarrollado para el curso CD-501 Analítica Predictiva de Datos —
