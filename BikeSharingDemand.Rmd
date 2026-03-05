@@ -4,7 +4,12 @@ output: html_document
 authors: Charpentier Gamboa Eduardo Alonso, Enríquez Acuña Handel 
 ---
 ```{r instalacion de librerias}
-install.packages(c("readr", "tidyverse", "janitor", "skimr", "kableExtra")) 
+library(readr)
+library(tidyverse)
+library(janitor)
+library(skimr)
+library(kableExtra)
+library(patchwork)
 ```
 
 ```{r Cargamos las librerías necesarias}
@@ -173,7 +178,7 @@ p_box_season <- ggplot(df_clean, aes(x = estacion, y = total_rentas, fill = esta
   theme_minimal(base_size = 13) +
   theme(legend.position = "none")
 
-p_box + p_box_season
+p_box | p_box_season
 ```
 ```{r outliers-detalle}
 if (nrow(outliers) > 0) {
