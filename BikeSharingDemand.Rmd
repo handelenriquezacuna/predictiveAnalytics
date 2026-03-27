@@ -276,5 +276,182 @@ ggplot(df_clean, aes(x = temp, y = total_rentas)) +
 ```
 Se puede observar que la temperatura afecta la cantidad de bicicletas alquiladas, ya que se puede observar una mayor cantidad de alquileres mientras más alta sea la temperatura
 
+# Preparación del dataset
+
+## Limpieza final
+
+Antes de construir cualquier modelo es necesario dejar el dataframe libre de columnas
+redundantes, registros duplicados y variables que filtren información de la variable
+objetivo.
+
+```{r limpieza-final}
+# 1. Eliminar columnas que no aportan al modelo
+#    - instant : índice secuencial sin valor predictivo
+#    - casual / registered : su suma ES la variable objetivo (fuga de datos)
+#    - pct_casual : derivada de casual y total_rentas (también fuga)
+df_model <- df_clean %>%
+  select(-instant, -casual, -registered, -pct_casual)
+
+cat("Dimensiones después de eliminar columnas redundantes:",
+    nrow(df_model), "filas ×", ncol(df_model), "columnas\n")
+```
+
+```{r duplicados}
+# 2. Verificar y eliminar registros duplicados
+n_dup <- df_model %>% duplicated() %>% sum()
+cat("Registros duplicados encontrados:", n_dup, "\n")
+
+df_model <- df_model %>% distinct()
+cat("Dimensiones tras eliminar duplicados:",
+    nrow(df_model), "filas ×", ncol(df_model), "columnas\n")
+```
+
+```{r verificacion-tipos}
+# 3. Verificación de tipos de datos
+df_model %>%
+  summarise(across(everything(), ~ class(.)[1])) %>%
+  pivot_longer(everything(), names_to = "Variable", values_to = "Tipo") %>%
+  kable(caption = "Tipos de datos finales por variable") %>%
+  kable_styling(bootstrap_options = c("striped", "hover"), full_width = FALSE)
+```
+
+## Feature engineering con fechas usando lubridate
+
+A partir de la columna *fecha* se extraen componentes temporales que capturan
+patrones cíclicos de demanda. Se utiliza **codificación cíclica** (seno / coseno)
+para que el modelo interprete correctamente la naturaleza circular del calendario
+(por ejemplo, diciembre y enero están "cerca" en el ciclo anual).
+
+Ejemplo en python: https://medium.com/@axelazara6/why-we-need-encoding-cyclical-features-79ecc3531232
+
+```{r feature-eng-fechas, message=FALSE}
+library(lubridate)
+
+df_model <- df_model %>%
+  mutate(
+    # ── Componentes directos ──
+    dia_del_anio   = yday(fecha),
+    semana_del_anio = isoweek(fecha),
+    trimestre      = quarter(fecha),
+    es_inicio_mes  = if_else(day(fecha) <= 5, 1L, 0L),
+    es_fin_mes     = if_else(day(fecha) >= 25, 1L, 0L),
+
+    # ── Codificación cíclica del mes (período = 12) ──
+    mes_sin = sin(2 * pi * as.numeric(mes) / 12),
+    mes_cos = cos(2 * pi * as.numeric(mes) / 12),
+
+    # ── Codificación cíclica del día de la semana (período = 7) ──
+    dia_sem_sin = sin(2 * pi * as.numeric(dia_semana) / 7),
+    dia_sem_cos = cos(2 * pi * as.numeric(dia_semana) / 7),
+
+    # ── Codificación cíclica del día del año (período = 365) ──
+    dia_anio_sin = sin(2 * pi * dia_del_anio / 365),
+    dia_anio_cos = cos(2 * pi * dia_del_anio / 365)
+  )
+
+cat("Nuevas features temporales creadas.\n")
+cat("Dimensiones actualizadas:",
+    nrow(df_model), "filas ×", ncol(df_model), "columnas\n")
+```
+
+```{r vista-features-fecha}
+df_model %>%
+  select(fecha, dia_del_anio, semana_del_anio, trimestre,
+         es_inicio_mes, es_fin_mes,
+         mes_sin, mes_cos, dia_sem_sin, dia_sem_cos) %>%
+  head(10) %>%
+  kable(digits = 3,
+        caption = "Primeras 10 filas — Features derivadas de fecha") %>%
+  kable_styling(bootstrap_options = c("striped", "hover", "condensed"),
+                full_width = FALSE, font_size = 12)
+```
+
+### Visualización de la codificación cíclica
+
+```{r viz-ciclica, fig.width=9, fig.height=4}
+p_mes <- ggplot(df_model, aes(x = mes_sin, y = mes_cos, color = estacion)) +
+  geom_point(size = 2, alpha = 0.6) +
+  scale_color_brewer(palette = "Set1") +
+  coord_equal() +
+  labs(title = "Codificación Cíclica del Mes",
+       x = "sin(mes)", y = "cos(mes)", color = "Estación") +
+  theme_minimal(base_size = 12)
+
+p_dia <- ggplot(df_model, aes(x = dia_anio_sin, y = dia_anio_cos, color = estacion)) +
+  geom_point(size = 1.5, alpha = 0.5) +
+  scale_color_brewer(palette = "Set1") +
+  coord_equal() +
+  labs(title = "Codificación Cíclica del Día del Año",
+       x = "sin(día)", y = "cos(día)", color = "Estación") +
+  theme_minimal(base_size = 12)
+
+p_mes + p_dia + plot_layout(guides = "collect") &
+  theme(legend.position = "bottom")
+```
+
+La distribución circular confirma que **las estaciones se agrupan en arcos del
+círculo**, lo cual permite al modelo capturar la periodicidad sin discontinuidades
+artificiales (como pasar de diciembre = 12 a enero = 1).
+
+## Codificación de variables categóricas
+
+Para que los algoritmos de regresión trabajen correctamente con las variables
+categóricas, se aplica **one-hot encoding** (variables dummy). Se excluye una
+categoría de referencia por variable para evitar multicolinealidad perfecta
+(trampa de las variables dummy).
+
+```{r one-hot-encoding}
+# Variables categóricas presentes
+cat_vars <- df_model %>%
+  select(where(is.factor)) %>%
+  names()
+
+cat("Variables categóricas a codificar:", paste(cat_vars, collapse = ", "), "\n\n")
+
+# Niveles por variable
+for (v in cat_vars) {
+  cat(v, "→", nlevels(df_model[[v]]), "niveles:",
+      paste(levels(df_model[[v]]), collapse = ", "), "\n")
+}
+```
+
+```{r dummy-encoding}
+# One-hot encoding con model.matrix (drop first = categoría de referencia)
+df_encoded <- df_model %>%
+  select(-fecha) %>%                        # fecha ya fue explotada en features
+  mutate(across(where(is.factor), as.factor))
+
+dummy_matrix <- model.matrix(~ . - 1, data = df_encoded)
+
+# Convertir a tibble limpio
+df_final <- as_tibble(dummy_matrix) %>%
+  janitor::clean_names()
+
+cat("\nDimensiones del dataset final (one-hot):",
+    nrow(df_final), "filas ×", ncol(df_final), "columnas\n")
+```
+
+```{r vista-dummy}
+df_final %>%
+  head(8) %>%
+  kable(digits = 3,
+        caption = "Primeras 8 filas del dataset codificado (one-hot)") %>%
+  kable_styling(bootstrap_options = c("striped", "hover", "condensed"),
+                full_width = FALSE, font_size = 11) %>%
+  scroll_box(width = "100%")
+```
+
+```{r resumen-final}
+cat("══════════════════════════════════════════════\n")
+cat("  RESUMEN DE PREPARACIÓN DEL DATASET\n")
+cat("══════════════════════════════════════════════\n")
+cat("  Filas               :", nrow(df_final), "\n")
+cat("  Columnas            :", ncol(df_final), "\n")
+cat("  Variables numéricas :", sum(sapply(df_final, is.numeric)), "\n")
+cat("  Valores faltantes   :", sum(is.na(df_final)), "\n")
+cat("══════════════════════════════════════════════\n")
+cat("  Dataset listo para modelado predictivo.\n")
+```
+
 *Proyecto desarrollado para el curso CD-501 Analítica Predictiva de Datos —
 Universidad Fidélitas.*
