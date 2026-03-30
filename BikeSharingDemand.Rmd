@@ -453,5 +453,189 @@ cat("═════════════════════════
 cat("  Dataset listo para modelado predictivo.\n")
 ```
 
+
+#División de entrenamiento /Prueba 
+```{r}
+
+
+set.seed(123)
+
+#Creación de una partición del 70% para el entrenamiento
+trainIndex <- createDataPartition(df_final$total_rentas, p = 0.7, list = FALSE)
+
+train <- df_final[trainIndex, ]
+test  <- df_final[-trainIndex, ]
+```
+
+#Modelo 1 
+#Este modelo tiene el objectivo hacer una indentificación y cunatificación
+#Basado en la influencia presente de los factores climaticos y temporales
+#En la demanda de bicicletas diarias
+
+#Ajuste del modelo 
+
+#Que explique el total_rentas
+#Buscamos aislar el impacto de variables criticas como son el clima 
+#De las varaibles del crecimiento del negocio como lo es el año 2012
+
+
+```{r}
+modelo_1 <- lm(total_rentas ~ anio2012 + 
+               temp + 
+               atemp + 
+               hum + 
+               windspeed + 
+               estacion_primavera + 
+               estacion_verano + 
+               estacion_otono +
+               clima_nublado + 
+               clima_lluvia_ligera +
+               mes_sin + 
+               mes_cos, 
+               data = train)
+summary(modelo_1)
+```
+#Evaluacion predictiva del primer modelo 
+```{r}
+
+# Realizar las predicciones usando el set de prueba (test)
+pred <- predict(modelo_1, test)
+RMSE <- sqrt(mean((test$total_rentas - pred)^2))
+MAE  <- mean(abs(test$total_rentas - pred))
+R2 <- cor(test$total_rentas, pred)^2
+```
+
+
+```{r}
+MAE
+```
+
+
+#Si sumamos todas las diferencias entre lo real y lo predich
+o (sin importar si sobraron o faltaron), el error típico es de 603 bicicletas.
+Al ser menor que el RMSE, nos confirma que el modelo es bastante estable y
+no tiene errores "extremos" o muy locos que arruinen el promedio.
+
+```{r}
+R2
+```
+
+#Interpretación:
+
+#Es la métrica estrella. El modelo logra explicar el 82.48% de la variabilidad 
+de la demanda en el set de prueba. Que este valor sea tan alto 
+(y cercano al de entrenamiento)
+confirma que no hay sobreajuste (overfitting) y que el modelo generaliza con éxito.
+
+```{r}
+RMSE
+```
+# Interpretación
+
+#En promedio, el modelo se equivoca por 814 bicicletas. Esto quiere decir que 
+si el modelo predice 4,000 rentas, el valor real probablemente estará entre 
+3,186 y 4,814. Para un negocio que mueve miles de unidades, un error de 814 
+es un margen aceptable y manejable.
+
+#CONCLUSIÓN: 
+#El modelo presenta un ajuste de alta calidad. La cercanía de los puntos 
+a la línea roja confirma su robustez predictiva
+
+
+#Modelo 2 
+
+#Objectivo del modelo:
+
+#Haremos una evaluación con un modelo con menos variables (más ahorrativo)
+#Mantiene la capacidad predictiva del modelo 1, eliminando el ruido estadístico
+
+# En este modelo incluimos solo los "Top Predictors" del Modelo 1:
+# - anio2012 (Crecimiento)
+# - atemp (Sensación térmica - que fue más relevante que temp)
+# - hum y windspeed (Factores climáticos de castigo)
+# - clima y estaciones (Contexto ambiental)
+
+```{r}
+modelo_2 <- lm(total_rentas ~ anio2012 + 
+               atemp + 
+               hum + 
+               windspeed + 
+               estacion_primavera + 
+               estacion_otono +
+               clima_nublado + 
+               clima_lluvia_ligera, 
+               data = train)
+
+
+summary(modelo_2)
+```
+
+
+#Evaluación predictiva del segundo modelo
+
+```{r}
+
+pred_2 <- predict(modelo_2, test)
+
+
+RMSE2   <- sqrt(mean((test$total_rentas - pred_2)^2))
+MAE2    <- mean(abs(test$total_rentas - pred_2))
+R2 <- cor(test$total_rentas, pred_2)^2
+```
+
+```{r}
+RMSE2
+```
+#Interpretación:
+
+#Pérdida de Precisión: Al quitar variables como los meses (mes_sin, mes_cos) 
+o la temperatura real, el error subió en unas 49 bicicletas. 
+El modelo ahora es un poco menos exacto, pero más simple.
+
+
+```{r}
+
+R2
+```
+#Interpretación:
+
+#El modelo simplificado sigue explicando el 80.30% de la demanda. 
+Es un modelo robusto, pero perdimos un 2.18% de precisión al eliminar variables.
+
+```{r}
+MAE2
+```
+#Interpretación:
+
+#El error absoluto promedio subió en 37 bicicletas. Esto significa que, en un
+día típico, el Modelo 2 se aleja más de la realidad que el Modelo 1.
+
+#Conclusiones del modelo 2:
+
+Aunque el Modelo 2 cumple con el principio de ahorrativo 
+(usar menos variables para facilitar la interpretación), en este caso específico
+la simplificación no compensa la pérdida de precisión.
+En un negocio de logística como Bike Sharing, una diferencia de 814 vs 863 en el
+RMSE puede significar una gestión de inventario menos eficiente.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 *Proyecto desarrollado para el curso CD-501 Analítica Predictiva de Datos —
 Universidad Fidélitas.*
