@@ -10,6 +10,10 @@ library(janitor)
 library(skimr)
 library(kableExtra)
 library(patchwork)
+library(caret)
+library(randomForest)
+library(rpart)
+library(rpart.plot)
 ```
 
 ```{r Cargamos las librerías necesarias}
@@ -618,6 +622,75 @@ la simplificación no compensa la pérdida de precisión.
 En un negocio de logística como Bike Sharing, una diferencia de 814 vs 863 en el
 RMSE puede significar una gestión de inventario menos eficiente.
 
+
+# Modelo 3
+#
+
+
+```{r}
+
+set.seed(123)
+
+modelo_3 <- rpart(
+  total_rentas ~ .,
+  data = train,
+  method = "anova",
+  control = rpart.control(cp = 0.001)
+)
+
+summary(modelo_3)
+
+```
+
+```{r}
+rpart.plot(modelo_3,
+           type = 2,
+           extra = 101,
+           fallen.leaves = TRUE,
+           main = "Árbol de decisión para demanda de bicicletas")
+
+```
+
+
+```{r}
+# Realizar las predicciones usando el set de prueba (test)
+pred_3 <- predict(modelo_3, test)
+
+RMSE3 <- sqrt(mean((test$total_rentas - pred_3)^2))
+MAE3  <- mean(abs(test$total_rentas - pred_3))
+R2_3  <- cor(test$total_rentas, pred_3)^2
+
+RMSE3
+MAE3
+R2_3
+```
+
+```{r}
+comparacion <- tibble(
+  Modelo = c("Modelo 1 (Regresión lineal completa)",
+             "Modelo 2 (Regresión lineal simplificada)",
+             "Modelo 3 (Árbol de decisión)"),
+  
+  RMSE = c(RMSE, RMSE2, RMSE3),
+  MAE  = c(MAE,  MAE2,  MAE3),
+  R2   = c(R2,   R2,    R2_3)
+)
+
+comparacion %>%
+  kable(digits = 2, caption = "Comparación de desempeño de modelos") %>%
+  kable_styling(full_width = FALSE)
+```
+
+
+#Interpretación
+
+#El error absoluto promedio subió 46.24 bicicletas
+
+#Conclusiones modelo 3
+
+El árbol de desiciones logra capturar mejor los cambios bruscos de demanda que dependen de condiciones específicas (clima, estación, temperatura, etc.), algo que los modelos lineales no pueden representar fácilmente.
+Sin embargo, este tipo de modelo puede volverse más inestable y sensible a los datos.
+En un negocio como alquiler de bicicletas, una mejora en el error de predicción puede traducirse o interpretarse en una mejor planificación del número de bicicletas disponibles cada día, reduciendo faltantes o excesos.
 
 
 
