@@ -1,7 +1,7 @@
 ---
 title: "BikeSharingDemand"
 output: html_document
-authors: Charpentier Gamboa Eduardo Alonso, Enríquez Acuña Handel 
+authors: Charpentier Gamboa Eduardo Alonso, Enríquez Acuña Handel y Hidalgo Guevara Daniel Josué
 ---
 ```{r instalacion de librerias}
 library(readr)
