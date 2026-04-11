@@ -4,6 +4,7 @@ output: html_document
 authors: Charpentier Gamboa Eduardo Alonso, Enríquez Acuña Handel y Hidalgo Guevara Daniel Josué
 ---
 ```{r instalacion de librerias}
+library(xgboost)
 library(readr)
 library(tidyverse)
 library(janitor)
@@ -584,7 +585,7 @@ pred_2 <- predict(modelo_2, test)
 
 RMSE2   <- sqrt(mean((test$total_rentas - pred_2)^2))
 MAE2    <- mean(abs(test$total_rentas - pred_2))
-R2 <- cor(test$total_rentas, pred_2)^2
+R2_2 <- cor(test$total_rentas, pred_2)^2
 ```
 
 ```{r}
@@ -692,21 +693,96 @@ El árbol de desiciones logra capturar mejor los cambios bruscos de demanda que 
 Sin embargo, este tipo de modelo puede volverse más inestable y sensible a los datos.
 En un negocio como alquiler de bicicletas, una mejora en el error de predicción puede traducirse o interpretarse en una mejor planificación del número de bicicletas disponibles cada día, reduciendo faltantes o excesos.
 
+# Modelo 4 — Random Forest
+
+Ensamble de árboles de decisión que captura interacciones no lineales entre clima y estacionalidad, las cuales los modelos lineales (Modelos 1 y 2) no pueden representar.
+
+```{r modelo-4-rf}
+set.seed(123)
+
+modelo_4 <- randomForest(
+  total_rentas ~ .,
+  data = train,
+  ntree = 500,
+  mtry = 15,
+  importance = TRUE
+)
+
+pred_4 <- predict(modelo_4, test)
+
+RMSE4 <- sqrt(mean((test$total_rentas - pred_4)^2))
+MAE4  <- mean(abs(test$total_rentas - pred_4))
+R2_4  <- cor(test$total_rentas, pred_4)^2
+
+RMSE4
+MAE4
+R2_4
+```
+
+# Modelo 5 — XGBoost
+
+Modelo de gradient boosting que construye árboles secuencialmente, donde cada árbol corrige los errores del anterior. Suele obtener el mejor desempeño en datasets tabulares como este.
+```{r modelo-5-xgb, message=FALSE, warning=FALSE}
+set.seed(123)
+
+# Forzar todo a numeric explícitamente (xgboost >= 2.0 es estricto con tipos)
+x_train <- as.matrix(sapply(train %>% select(-total_rentas), as.numeric))
+y_train <- as.numeric(train$total_rentas)
+x_test  <- as.matrix(sapply(test  %>% select(-total_rentas), as.numeric))
+y_test  <- as.numeric(test$total_rentas)
+
+# Usar xgb.DMatrix que es el formato nativo y más robusto
+dtrain <- xgb.DMatrix(data = x_train, label = y_train)
+dtest  <- xgb.DMatrix(data = x_test,  label = y_test)
+
+# Entrenamiento con xgb.train (más estable que xgboost() en versiones nuevas)
+modelo_5 <- xgb.train(
+  params = list(
+    objective        = "reg:squarederror",
+    max_depth        = 6,
+    eta              = 0.05,
+    subsample        = 0.8,
+    colsample_bytree = 0.8
+  ),
+  data    = dtrain,
+  nrounds = 400,
+  verbose = 0
+)
+
+pred_5 <- predict(modelo_5, dtest)
+
+RMSE5 <- sqrt(mean((y_test - pred_5)^2))
+MAE5  <- mean(abs(y_test - pred_5))
+R2_5  <- cor(y_test, pred_5)^2
+
+RMSE5
+MAE5
+R2_5
+```
+
+```{r tabla-comparativa}
+comparacion <- tibble(
+  Modelo = c("Modelo 1 (Regresión lineal completa)",
+             "Modelo 2 (Regresión lineal simplificada)",
+             "Modelo 3 (Árbol de decisión)",
+             "Modelo 4 (Random Forest)",
+             "Modelo 5 (XGBoost)"),
+  
+  RMSE = c(RMSE, RMSE2, RMSE3, RMSE4, RMSE5),
+  MAE  = c(MAE,  MAE2,  MAE3,  MAE4,  MAE5),
+  R2   = c(R2,   R2_2,  R2_3,  R2_4,  R2_5)
+)
+
+comparacion %>%
+  kable(digits = 2, caption = "Comparación de desempeño de modelos") %>%
+  kable_styling(full_width = FALSE)
+```
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
+Los modelos lineales **(Modelo 1 y Modelo 2)** establecen una línea base sólida: el Modelo 1 alcanza un RMSE de 814.33 bicicletas con un R² de 0.82, y el Modelo 2 simplificado degrada ligeramente a 863.42 de RMSE y 0.80 de R². Esto confirma que la relación entre clima, estacionalidad y demanda tiene un componente lineal fuerte — con solo asumir aditividad entre variables, ya se captura el 82% de la variabilidad del negocio.
+El **árbol de decisión** (Modelo 3) es el eslabón más débil de la comparación, con un RMSE de 918.07 y un R² de 0.78. Un árbol único resulta demasiado rígido: particiona el espacio de decisión en bloques discretos y no logra aprovechar la riqueza del dataset de 731 días.
+El salto cualitativo ocurre con los ensambles. El **Random Forest** (Modelo 4) alcanza un RMSE de 688.55 y un R² de 0.88, lo que representa una reducción del error de aproximadamente 15.4% frente al Modelo 1. El XGBoost (Modelo 5) empuja aún más la frontera con un RMSE de 632.32 y un R² de 0.89, equivalente a una reducción del 22.3% respecto al mejor modelo lineal. La diferencia entre Random Forest y XGBoost es de 56 bicicletas de RMSE a favor de XGBoost — una mejora marginal pero consistente también en el MAE (432 vs 487), lo que sugiere que XGBoost no solo reduce errores extremos sino que mejora la precisión en el día típico.
+El modelo seleccionado como ganador es el Modelo 5 — **XGBoost**, por ofrecer simultáneamente el menor RMSE, el menor MAE y el mayor R² sobre el set de prueba, sin evidencia de sobreajuste.
 
 
 
