@@ -674,7 +674,7 @@ comparacion <- tibble(
   
   RMSE = c(RMSE, RMSE2, RMSE3),
   MAE  = c(MAE,  MAE2,  MAE3),
-  R2   = c(R2,   R2,    R2_3)
+  R2 = c(R2, R2, R2_3)
 )
 
 comparacion %>%
@@ -693,8 +693,97 @@ El árbol de desiciones logra capturar mejor los cambios bruscos de demanda que 
 Sin embargo, este tipo de modelo puede volverse más inestable y sensible a los datos.
 En un negocio como alquiler de bicicletas, una mejora en el error de predicción puede traducirse o interpretarse en una mejor planificación del número de bicicletas disponibles cada día, reduciendo faltantes o excesos.
 
+# Modelo Final Seleccionado
 
+## Modelos evaluados
 
+Para predecir la demanda diaria de alquiler de bicicletas se entrenaron y compararon tres modelos de regresión supervisada de creciente complejidad:
+
+- **Modelo 1 — Regresión lineal completa:** 12 predictores incluyendo variables climáticas (`temp`, `atemp`, `hum`, `windspeed`), estacionales (estaciones del año, codificación cíclica del mes) y de crecimiento (`anio2012`).
+- **Modelo 2 — Regresión lineal simplificada:** versión reducida del Modelo 1 que conserva únicamente los predictores más significativos, bajo el principio de parsimonia.
+- **Modelo 3 — Árbol de decisión CART:** modelo no lineal basado en particiones recursivas, con parámetro de complejidad `cp = 0.001` para permitir un crecimiento detallado del árbol.
+
+Todos los modelos fueron evaluados sobre el **mismo set de prueba** (30% de los datos, 219 observaciones) separado con `set.seed(123)` y `createDataPartition()`, garantizando una comparación justa.
+
+## Modelo seleccionado
+
+**El modelo seleccionado como ganador es el Modelo 1 — Regresión lineal completa.**
+
+### Justificación técnica
+
+1. **Mejor desempeño cuantitativo.** Obtuvo el menor RMSE (814.33), el menor MAE (603.46) y el mayor R² (0.82) entre los tres modelos evaluados. La diferencia frente al Modelo 2 simplificado es de aproximadamente 49 bicicletas de RMSE, y frente al árbol de decisión de 104 bicicletas.
+
+2. **Capacidad explicativa sólida.** Explica el 82% de la variabilidad de la demanda diaria sobre el set de prueba, un nivel consistente con el que se observó en entrenamiento, lo que confirma que no hay sobreajuste y el modelo generaliza correctamente.
+
+3. **Superioridad sobre un modelo no lineal.** El hecho de que la regresión lineal supere al árbol de decisión indica que las relaciones dominantes entre las variables climáticas/temporales y la demanda son aproximadamente lineales y monótonas dentro del rango observado. Un árbol único, al particionar el espacio en bloques discretos, pierde la suavidad de estas relaciones y genera predicciones escalonadas menos precisas.
+
+4. **Interpretabilidad directa.** A diferencia del árbol, la regresión lineal entrega coeficientes numéricos que traducen directamente el efecto de cada variable sobre la demanda (ej: cuánto suma un punto normalizado de temperatura). Esta transparencia es crítica para la comunicación con stakeholders del negocio y facilita las recomendaciones operativas de la Sección 5.
+
+5. **Estabilidad del modelo.** Los coeficientes de una regresión lineal son deterministas dado el set de entrenamiento, mientras que los árboles son sensibles a pequeños cambios en los datos. Para un sistema de planificación diaria, la estabilidad es un atributo deseable.
+
+## Parámetros principales del modelo seleccionado
+
+El Modelo 1 no requiere tuning de hiperparámetros — es una regresión lineal múltiple por mínimos cuadrados ordinarios (OLS). La especificación final incluye 12 predictores seleccionados por el equipo en base al análisis exploratorio:
+
+| Categoría | Variables |
+|---|---|
+| Crecimiento del negocio | `anio2012` |
+| Clima continuo | `temp`, `atemp`, `hum`, `windspeed` |
+| Estación del año | `estacion_primavera`, `estacion_verano`, `estacion_otono` |
+| Condición climática | `clima_nublado`, `clima_lluvia_ligera` |
+| Estacionalidad cíclica | `mes_sin`, `mes_cos` |
+
+**Configuración técnica:**
+
+- Método de estimación: mínimos cuadrados ordinarios (`lm()` de R base)
+- Split train/test: 70/30 con `createDataPartition()` estratificada
+- Semilla de reproducibilidad: `set.seed(123)`
+- Categorías de referencia omitidas para evitar multicolinealidad: `estacion_invierno`, `clima_despejado`, `anio2011`
+
+---
+
+# Métricas Finales
+
+## Evaluación sobre set de prueba
+
+Los tres modelos fueron evaluados con las siguientes métricas estándar de regresión:
+
+- **RMSE (Root Mean Squared Error):** penaliza errores grandes de forma cuadrática; unidad comparable a la variable objetivo (bicicletas).
+- **MAE (Mean Absolute Error):** error promedio absoluto; robusto frente a outliers.
+- **R² (Coeficiente de determinación):** proporción de la varianza explicada por el modelo.
+
+## Tabla comparativa final
+
+| Modelo | RMSE | MAE | R² |
+|---|---|---|---|
+| **Modelo 1 (Regresión lineal completa)** ⭐ | **814.33** | **603.46** | **0.82** |
+| Modelo 2 (Regresión lineal simplificada) | 863.42 | 640.12 | 0.80 |
+| Modelo 3 (Árbol de decisión) | 918.07 | 686.36 | 0.78 |
+
+##  Interpretación cuantitativa de las métricas del modelo ganador
+
+**RMSE = 814.33 bicicletas.** En promedio, las predicciones del Modelo 1 se desvían de la demanda real por ~814 unidades. Sobre una demanda promedio diaria de ~4,504 bicicletas, esto representa un margen de error relativo del **18%**. Para un negocio de logística urbana que mueve miles de unidades, es un margen operativamente manejable.
+
+**MAE = 603.46 bicicletas.** El error absoluto promedio es menor que el RMSE, lo que indica que el modelo no produce errores extremos que inflen artificialmente el RMSE. Las predicciones son estables y consistentes día a día.
+
+**R² = 0.82.** El modelo explica el 82% de la variabilidad de la demanda diaria usando únicamente variables climáticas y temporales. El 18% restante corresponde a factores no capturados por el dataset: eventos especiales, cambios de infraestructura, variabilidad individual de usuarios, entre otros.
+
+**Relación RMSE/MAE ≈ 1.35.** Un cociente cercano a 1.25-1.4 es característico de errores bien distribuidos sin colas extremas. Confirma que el modelo no tiene días catastróficamente mal predichos.
+
+##  Resumen ejecutivo de métricas
+
+| Métrica | Valor | Lectura operativa |
+|---|---|---|
+| RMSE | 814 bicicletas | Margen típico de planificación diaria |
+| MAE | 603 bicicletas | Error del día promedio |
+| R² | 82% | Porcentaje de la demanda explicable por clima y calendario |
+| Error relativo | ~18% | Sobre una demanda media de 4,504 bicicletas/día |
+
+## Nota sobre el alcance del análisis
+
+Elegir el Modelo 1 no implica que los modelos no lineales sean inadecuados en general para este problema — solo que, con este dataset y esta configuración, un árbol único no logra superar a una regresión lineal bien especificada. Si en el futuro el equipo explora modelos de ensamble (Random Forest, Gradient Boosting), es probable que puedan reducir aún más el RMSE, pero eso queda como trabajo futuro fuera del alcance de este entregable. Lo que queda demostrado es que **el Modelo 1 es la mejor opción entre las tres alternativas evaluadas en este proyecto**.
+
+---
 
 *Proyecto desarrollado para el curso CD-501 Analítica Predictiva de Datos —
 Universidad Fidélitas.*
