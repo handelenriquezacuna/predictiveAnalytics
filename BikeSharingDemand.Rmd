@@ -762,6 +762,7 @@ Los tres modelos fueron evaluados con las siguientes métricas estándar de regr
 
 ##  Interpretación cuantitativa de las métricas del modelo ganador
 
+
 **RMSE = 814.33 bicicletas.** En promedio, las predicciones del Modelo 1 se desvían de la demanda real por ~814 unidades. Sobre una demanda promedio diaria de ~4,504 bicicletas, esto representa un margen de error relativo del **18%**. Para un negocio de logística urbana que mueve miles de unidades, es un margen operativamente manejable.
 
 **MAE = 603.46 bicicletas.** El error absoluto promedio es menor que el RMSE, lo que indica que el modelo no produce errores extremos que inflen artificialmente el RMSE. Las predicciones son estables y consistentes día a día.
@@ -769,6 +770,35 @@ Los tres modelos fueron evaluados con las siguientes métricas estándar de regr
 **R² = 0.82.** El modelo explica el 82% de la variabilidad de la demanda diaria usando únicamente variables climáticas y temporales. El 18% restante corresponde a factores no capturados por el dataset: eventos especiales, cambios de infraestructura, variabilidad individual de usuarios, entre otros.
 
 **Relación RMSE/MAE ≈ 1.35.** Un cociente cercano a 1.25-1.4 es característico de errores bien distribuidos sin colas extremas. Confirma que el modelo no tiene días catastróficamente mal predichos.
+
+#Gráfico de predicción:
+```{r}
+predicciones_m1 <- predict(modelo_1, newdata = test)
+
+# Tabla de comparación 
+df_evaluacion <- data.frame(
+  Real = test$total_rentas,
+  Predicho = predicciones_m1
+)
+
+# 3. Gráfico de dispersión 
+library(ggplot2)
+
+ggplot(df_evaluacion, aes(x = Real, y = Predicho)) +
+  geom_point(color = "steelblue") +
+  geom_abline(intercept = 0, slope = 1, color = "red") + 
+  labs(
+    title = "Predicción vs Valores Reales",
+    x = "Valores Reales",
+    y = "Predicciones"
+  ) +
+  theme_minimal()
+
+```
+
+
+
+
 
 ##  Resumen ejecutivo de métricas
 
